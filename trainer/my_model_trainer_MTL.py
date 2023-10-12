@@ -8,6 +8,8 @@ from torchvision.utils import save_image
 import os
 from model.gan import Generator,GeneratorCifar,weights_init
 from model.model_multitask import MTL
+from torchinfo import summary
+import matplotlib.pyplot as plt
 
 
 class MyModelTrainer:
@@ -243,6 +245,7 @@ class MyModelTrainer:
                     fake_out = fake_out.flatten()
                     d_loss_fake = criterion2(fake_out, fake_label)
                     fake_scores = fake_out  # closer to 0 means better
+
                     d_loss_gp = self.gradient_penalty(model_d, device, real_img, fake_img, num_img)
                     # d_loss_gp = 0
                     if round_idx < 3 and epoch < 5:

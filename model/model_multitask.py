@@ -27,7 +27,7 @@ class MTLResNet(nn.Module):
         self.base_width = width_per_group
         
         self.sharedlayer = nn.Sequential(
-            nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1,bias=False),
+            nn.Conv2d(1, self.inplanes, kernel_size=3, stride=1, padding=1,bias=False),
             nn.BatchNorm2d(self.inplanes),
             nn.ReLU(inplace=True), # batchsize, 16, 28, 28
             self._make_layer(block, 16, layers[0]),

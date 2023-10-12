@@ -219,8 +219,8 @@ def load_partition_data_mnist(batch_size,
                               client_num_in_total,
                               model_name,
                               alpha,
-                              train_path="/home/haozhao/experiment/KBFD/data/MNIST/train",
-                              test_path="/home/haozhao/experiment/KBFD/data/MNIST/test"):
+                              train_path="data/MNIST/train",
+                              test_path="data/MNIST/test"):
     users, groups, train_data, test_data = read_data(train_path, test_path)
    
 
@@ -285,8 +285,8 @@ def load_partition_distillation_data_mnist(batch_size,
                                         client_num_in_total,
                                         model_name,
                                         alpha,
-                                        train_path="/home/haozhao/experiment/KBFD/data/MNIST/train",
-                                        test_path="/home/haozhao/experiment/KBFD/data/MNIST/test"):
+                                        train_path="data/MNIST/train",
+                                        test_path="data/MNIST/test"):
 
     users, groups, train_data, test_data = read_data(train_path, test_path)
     new_users, new_train_data, new_test_data = noniid_merge_data_with_dirichlet_distribution(client_num_in_total,
@@ -352,7 +352,7 @@ def load_partition_data_fashion_mnist(batch_size,
                                 client_num_in_total,
                                 model_name,
                                 alpha,
-                                data_dir="/home/haozhao/experiment/KBFD/data/FASHION_MNIST/",
+                                data_dir="data/FASHION_MNIST/",
                                 ):
     class_num = 10
 
@@ -360,7 +360,7 @@ def load_partition_data_fashion_mnist(batch_size,
         with gzip.open(filename) as bytestream:
             bytestream.read(head_size)
             buf = bytestream.read(data_size * num_data)
-            data = np.frombuffer(buf, dtype=np.uint8).astype(np.float)
+            data = np.frombuffer(buf, dtype=np.uint8).astype(np.float32)
         return data
 
     new_users = []
@@ -464,8 +464,8 @@ def load_partition_data_emnist(batch_size,
                                 client_num_in_total,
                                 model_name,
                                 alpha,
-                                train_path="/home/haozhao/experiment/KBFD/data/EMINIST/datasets/fed_emnist_train.h5",
-                                test_path="/home/haozhao/experiment/KBFD/data/EMINIST/datasets/fed_emnist_test.h5"):
+                                train_path="data/EMINIST/datasets/fed_emnist_train.h5",
+                                test_path="data/EMINIST/datasets/fed_emnist_test.h5"):
     _EXAMPLE = 'examples'
     _IMGAE = 'pixels'
     _LABEL = 'label'
@@ -587,7 +587,7 @@ def load_partition_distillation_data_emnist(batch_size,
                                             client_num_in_total,
                                             model_name,
                                             alpha,
-                                            test_path="/home/haozhao/experiment/KBFD/data/EMINIST/datasets/fed_emnist_test.h5"):
+                                            test_path="data/EMINIST/datasets/fed_emnist_test.h5"):
     _EXAMPLE = 'examples'
     _IMGAE = 'pixels'
     _LABEL = 'label'
@@ -653,7 +653,7 @@ from torchvision.utils import save_image
 
 
 def load_partition_data_svhn(batch_size, client_number, partition_alpha,
-                             data_dir="/home/haozhao/experiment/KBFD/data/SVHN"):
+                             data_dir="data/SVHN"):
     X_train, y_train, X_test, y_test, net_dataidx_map = partition_data(data_dir, client_number, partition_alpha)
     net_dataidx_map_test = partition_test_data(data_dir, client_number, partition_alpha)
    
@@ -938,7 +938,7 @@ def partition_test_data(datadir, n_nets, alpha):
     return net_dataidx_map
 
 def load_partition_data_cifar10(batch_size, client_number, partition_alpha,
-                                data_dir="/home/haozhao/experiment/KBFD/data/CIFAR"):
+                                data_dir="data/CIFAR"):
     X_train, y_train, X_test, y_test, net_dataidx_map = partition_data(data_dir, client_number, partition_alpha)
     net_dataidx_map_test = partition_test_data(data_dir, client_number, partition_alpha)
    
@@ -1058,13 +1058,13 @@ class CIFAR10_truncated(data.Dataset):
         return len(self.data)
 
 def load_partition_distillation_data_cifar100(batch_size, client_number, partition_alpha,
-                                data_dir="/home/haozhao/experiment/KBFD/data/CIFAR100"):
+                                data_dir="data/CIFAR100"):
 
     _, test_data_global = get_dataloader_CIFAR100(data_dir, batch_size, batch_size)
     return test_data_global
 
 def load_partition_distillation_data_cifar10(batch_size, client_number, partition_alpha,
-                                data_dir="/home/haozhao/experiment/KBFD/data/CIFAR"):
+                                data_dir="data/CIFAR"):
 
     _, test_data_global = get_dataloader_CIFAR10(data_dir, batch_size, batch_size)
     return test_data_global
@@ -1157,12 +1157,12 @@ if __name__ == '__main__':
     #                             0,
     #                             0.1,
     #                             )
-    train = SVHN(root ='/home/haozhao/experiment/KBFD/data/SVHN'
+    train = SVHN(root ='data/SVHN'
                                  ,split ="train"
                                  ,download = True
                                  ,transform = False
                                  )
-    test = SVHN(root ='/home/haozhao/experiment/KBFD/data/SVHN'
+    test = SVHN(root ='data/SVHN'
                                  ,split ="test"
                                  ,download = True
                                  ,transform = False)
@@ -1170,7 +1170,7 @@ if __name__ == '__main__':
     # for batch_idx, (img, labels) in enumerate(test_data_global):
     #     if batch_idx < 10:
     #         real_images = img.view(-1, 3, 32, 32)
-    #         save_image(real_images, '/home/haozhao/experiment/KBFD/pic/id_{}.png'.format(batch_idx))
+    #         save_image(real_images, 'pic/id_{}.png'.format(batch_idx))
     print("finish")
 
 

@@ -74,7 +74,8 @@ def weights_init(m):
 class GeneratorCifar(nn.Module):
     def __init__(self, noise_dimension):
         super(GeneratorCifar, self).__init__()
-        self.n_channel = 3
+        self.noise_dimension = noise_dimension
+        self.n_channel = 1
         self.n_g_feature = 64
         self.module = nn.Sequential(
             nn.ConvTranspose2d(noise_dimension, 4 * self.n_g_feature, kernel_size=4, bias=False),
@@ -85,7 +86,7 @@ class GeneratorCifar(nn.Module):
             nn.BatchNorm2d(2 * self.n_g_feature),
             nn.ReLU(),
 
-            nn.ConvTranspose2d(2 * self.n_g_feature, self.n_g_feature, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.ConvTranspose2d(2 * self.n_g_feature, self.n_g_feature, kernel_size=4, stride=2, padding=2, bias=False),
             nn.BatchNorm2d(self.n_g_feature),
             nn.ReLU(),
 
@@ -94,6 +95,7 @@ class GeneratorCifar(nn.Module):
         )
 
     def forward(self, x):
+        x = x.reshape(x.shape[0], x.shape[1], 1, 1)
         x = self.module(x)
         return x
 
