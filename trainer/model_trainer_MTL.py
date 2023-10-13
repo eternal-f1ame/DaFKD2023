@@ -9,10 +9,9 @@ import os
 from model.gan import Generator,GeneratorCifar,weights_init
 from model.model_multitask import MTL
 from torchinfo import summary
-import matplotlib.pyplot as plt
 
 
-class MyModelTrainer:
+class ModelTrainer:
     def __init__(self, model,args=None):
         # self.model_g = Generator(args.noise_dimension, 1 * 56 * 56)
         self.model_g = GeneratorCifar(args.noise_dimension)

@@ -14,7 +14,7 @@ from data_loader import load_partition_data_fashion_mnist,load_partition_data_sv
 
 from DaFKD import DaFKD
 from model.model_multitask import MTL
-from trainer.my_model_trainer_MTL import MyModelTrainer as MyModelTrainerMTL
+from trainer.model_trainer_MTL import ModelTrainer as ModelTrainerMTL
 
 import warnings
  
@@ -231,7 +231,7 @@ if __name__ == "__main__":
 
     model = create_model(args, model_name=args.model, output_dim=dataset[7])
 
-    mtl_model_trainer = MyModelTrainerMTL(model=model,args=args)
+    mtl_model_trainer = ModelTrainerMTL(model=model,args=args)
 
     if args.baseline == "DaFKD": 
         fedavgAPI = DaFKD(dataset, device, args, mtl_model_trainer)
