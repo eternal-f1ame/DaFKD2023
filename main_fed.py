@@ -235,4 +235,6 @@ if __name__ == "__main__":
 
     if args.baseline == "DaFKD": 
         fedavgAPI = DaFKD(dataset, device, args, mtl_model_trainer)
+        torch.cuda.empty_cache()
+        # torch.cuda.set_per_process_memory_fraction(0.5)
         fedavgAPI.train()

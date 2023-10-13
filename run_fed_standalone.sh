@@ -21,13 +21,13 @@ ROUND=61
 
 CLIENT_OPTIMIZER=adam
 
-EPOCH=20
+EPOCH=5
 
 GAN_EPOCH=5
 
 D_EPOCH=1
 
-ED_EPOCH=40
+ED_EPOCH=30
 NOISE_DIMENSION=100
 
 TEMPERATURE=20.0
@@ -42,7 +42,7 @@ BASELINE="DaFKD"
 
 
 
-python3 main_fed.py \
+CUDA_VISIBLE_DEVICES=0 python3 main_fed.py \
 --gpu $GPU \
 --dataset $DATASET \
 --model $MODEL \
