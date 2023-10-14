@@ -26,6 +26,7 @@ def read_data(train_data_dir, test_data_dir):
 
     test_files = os.listdir(test_data_dir)
     test_files = [f for f in test_files if f.endswith('.json')]
+
     for f in test_files:
         file_path = os.path.join(test_data_dir, f)
         with open(file_path, 'r') as inf:
@@ -138,13 +139,6 @@ def noniid_merge_data_with_dirichlet_distribution(client_num_in_total, train_dat
             all_distillation_data["x"] += value["x"]
             all_distillation_data["y"] += value["y"]
 
-    
-    # print(all_train_data['x'][0])
-
-    # print(all_train_data['y'][0])
-    # print(all_train_data['y'][1])
-
-
     train_label_list = np.asarray(all_train_data["y"])
     train_idx_map = non_iid_partition_with_dirichlet_distribution(train_label_list, client_num_in_total, class_num,
                                                                   alpha)
@@ -153,19 +147,6 @@ def noniid_merge_data_with_dirichlet_distribution(client_num_in_total, train_dat
         temp_data = {"x": [all_train_data["x"][i] for i in idx_list],
                      "y": [all_train_data["y"][i] for i in idx_list]}
         new_train_data[key] = temp_data
-    # plt.figure(figsize=(20, 10))
-    # label_dis = [[] for _ in range(class_num)]
-    # for index, (key, value) in enumerate(new_train_data.items()):
-    #     temp_y = np.asarray(value["y"])
-    #     for label in temp_y:
-    #         label_dis[int(label)].append(index)
-
-    # bin = np.arange(- 0.5, client_num_in_total + 0.5, 1)
-    # label = ["label {}".format(i) for i in range(class_num)]
-    # plt.hist(label_dis, stacked=True, bins=bin, label=label, rwidth=0.5)
-    # plt.xticks(np.arange(client_num_in_total))
-    # plt.legend()
-    # plt.savefig("train_data_dis.png")
 
     count2 = 0
     all_test_data = {"x": [], "y": []}
@@ -186,50 +167,81 @@ def noniid_merge_data_with_dirichlet_distribution(client_num_in_total, train_dat
         temp_data = {"x": [all_test_data["x"][i] for i in idx_list],
                      "y": [all_test_data["y"][i] for i in idx_list]}
         new_test_data[key] = temp_data
-    # plt.figure(figsize=(20, 10))
-    # label_dis = [[] for _ in range(class_num)]
-    # for index, (key, value) in enumerate(new_test_data.items()):
-    #     temp_y = np.asarray(value["y"])
-    #     for label in temp_y:
-    #         label_dis[int(label)].append(index)
 
-    # bin = np.arange(- 0.5, client_num_in_total + 0.5, 1)
-    # label = ["label {}".format(i) for i in range(class_num)]
-    # plt.hist(label_dis, stacked=True, bins=bin, label=label, rwidth=0.5)
-    # plt.xticks(np.arange(client_num_in_total))
-    # plt.legend()
-    # plt.savefig("test_data_dis.png")
-
-
-    # distillation_label_list = np.asarray(all_distillation_data["y"])
-    # distillation_idx_map = non_iid_partition_with_dirichlet_distribution(distillation_label_list, client_num_in_total, class_num,
-    #                                                              alpha)
-
-    # for index, idx_list in distillation_idx_map.items():
-    #     key = new_users[index]
-    #     temp_data = {"x": [all_distillation_data["x"][i] for i in idx_list],
-    #                  "y": [all_distillation_data["y"][i] for i in idx_list]}
-    #     new_distillation_data[key] = temp_data
-    # return new_users, new_train_data, new_test_data, new_distillation_data
     return new_users, new_train_data, new_test_data
 
-
 def load_partition_data_mnist(batch_size,
-                              client_num_in_total,
-                              model_name,
-                              alpha,
-                              train_path="data/MNIST/train",
-                              test_path="data/MNIST/test"):
-    users, groups, train_data, test_data = read_data(train_path, test_path)
-   
+                                client_num_in_total,
+                                model_name,
+                                alpha,
+                                data_dir="data/MNIST/",
+                                ):
+    class_num = 10
 
-    # new_users, new_train_data, new_test_data,new_distillation_data = noniid_merge_data_with_dirichlet_distribution(client_num_in_total,
-    #                                                                                          train_data, test_data,
-    #                                                                                          alpha)
-    new_users, new_train_data, new_test_data = noniid_merge_data_with_dirichlet_distribution(client_num_in_total,
-                                                                                             train_data, test_data,
-                                                                                             alpha)
-    
+    def extract_data(filename, num_data, head_size, data_size):
+        with gzip.open(filename) as bytestream:
+            bytestream.read(head_size)
+            buf = bytestream.read(data_size * num_data)
+            data = np.frombuffer(buf, dtype=np.uint8).astype(np.float32)
+        return data
+
+    new_users = []
+    groups=[]
+    new_train_data = {}
+    all_train_data = {"x": [], "y": []}
+    new_test_data = {}
+    all_test_data = {"x": [], "y": []}
+    for i in range(client_num_in_total):
+        if i < class_num:
+            new_users.append("f_0000" + str(i))
+        else:
+            new_users.append("f_000" + str(i))
+
+    data = extract_data(data_dir + 'train-images-idx3-ubyte.gz', 60000, 16, 28 * 28)
+    trX = data.reshape((60000, 28, 28, 1))
+ 
+    data = extract_data(data_dir + 'train-labels-idx1-ubyte.gz', 60000, 8, 1)
+    trY = data.reshape((60000))
+ 
+    data = extract_data(data_dir + 't10k-images-idx3-ubyte.gz', 10000, 16, 28 * 28)
+    teX = data.reshape((10000, 28, 28, 1))
+ 
+    data = extract_data(data_dir + 't10k-labels-idx1-ubyte.gz', 10000, 8, 1)
+    teY = data.reshape((10000))
+
+    trX = np.asarray(trX).tolist()
+    teX = np.asarray(teX).tolist()
+    trY = np.asarray(trY).tolist()
+    teY = np.asarray(teY).tolist()
+
+    for i in range(len(trX)):
+        all_train_data['x'].append(remake_fashion_mnist(trX[i]))
+        all_train_data['y'].append(trY[i])
+
+    train_label_list = np.asarray(all_train_data["y"])
+    train_idx_map = non_iid_partition_with_dirichlet_distribution(train_label_list, client_num_in_total, class_num,
+                                                                 alpha)
+
+    for index, idx_list in train_idx_map.items():
+        key = new_users[index]
+        temp_data = {"x": [all_train_data["x"][i] for i in idx_list],
+                     "y": [all_train_data["y"][i] for i in idx_list]}
+        new_train_data[key] = temp_data
+
+    for i in range(len(teX)):
+        all_test_data['x'].append(remake_fashion_mnist(teX[i]))
+        all_test_data['y'].append(teY[i])
+
+    test_label_list = np.asarray(all_test_data["y"])
+    test_idx_map = non_iid_partition_with_dirichlet_distribution(test_label_list, client_num_in_total, class_num,
+                                                                 alpha)
+
+    for index, idx_list in test_idx_map.items():
+        key = new_users[index]
+        temp_data = {"x": [all_test_data["x"][i] for i in idx_list],
+                     "y": [all_test_data["y"][i] for i in idx_list]}
+        new_test_data[key] = temp_data        
+
     if len(groups) == 0:
         groups = [None for _ in new_users]
     train_data_num = 0
@@ -255,28 +267,17 @@ def load_partition_data_mnist(batch_size,
 
         # index using client index
         train_data_local_dict[client_idx] = train_batch
-        # logging.debug("train_data_local_dict[{}].size={}".format(client_idx, np.array(train_batch).shape))
         test_data_local_dict[client_idx] = test_batch
-        # logging.debug("test_data_local_dict[{}].size={}".format(client_idx, np.array(test_batch).shape))
         train_data_global += train_batch
         test_data_global += test_batch
-        # logging.info("client_idx = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
-        #     client_idx, len(train_batch), len(test_batch)))
+        logging.info("client_idx = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
+            client_idx, len(train_batch), len(test_batch)))
         client_idx += 1
 
-    # logging.info("loading distillation_data...")
-
-    # for u in new_users:
-    #     distillation_batch = batch_data(new_distillation_data[u], batch_size, model_name)
-    #     distillation_data_global += distillation_batch
-
-    # logging.info("finish loading distillation_data...")
     logging.info("finished the loading data")
     client_num = client_idx
     class_num = 10
 
-    # return client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
-    #        train_data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num,distillation_data_global
     return client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
             train_data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
 

@@ -36,32 +36,9 @@ ES_LR=0.0001
 
 AGGREGATION=FedDF
 CI=0
-AGGREGATION="FedDF"
 
 BASELINE="DaFKD"
 
 
 
-CUDA_VISIBLE_DEVICES=0 python3 main_fed.py \
---gpu $GPU \
---dataset $DATASET \
---model $MODEL \
---partition_method $DISTRIBUTION  \
---alpha $ALPHA  \
---aggregation_method $AGGREGATION  \
---client_num_in_total $CLIENT_NUM \
---client_num_per_round $WORKER_NUM \
---comm_round $ROUND \
---epochs $EPOCH \
---client_optimizer $CLIENT_OPTIMIZER \
---batch_size $BATCH_SIZE \
---d_epoch $D_EPOCH \
---ed_epoch $ED_EPOCH \
---gan_epoch $GAN_EPOCH \
---noise_dimension $NOISE_DIMENSION \
---temperature $TEMPERATURE \
---lr $LR \
---es_lr $ES_LR \
---ci $CI \
---baseline $BASELINE \
---distillation_dataset $DISTILLATION_DATASET
+CUDA_VISIBLE_DEVICES=0 python main_fed.py --gpu 0 --dataset fashion_mnist --model DaFKD --partition_method hetero --alpha 1 --aggregation_method FedDF --client_num_in_total 5 --client_num_per_round 2 --comm_round 25 --epochs 5 --client_optimizer adam --batch_size 32 --d_epoch 1 --ed_epoch 20 --gan_epoch 5 --noise_dimension 100 --temperature 20.0 --lr 0.0001 --es_lr 0.0001 --ci 0 --baseline "DaFKD" --distillation_dataset mnist
