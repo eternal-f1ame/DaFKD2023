@@ -35,20 +35,8 @@ cd <DIR>/DA-FKD
 
 * URL:
 
-    ```bash
-    wget https://www.dropbox.com/s/2d9q9w6qg8fjx2o/data.zip
-    ```
-
-* Extract the dataset
-
-    ```bash
-    unzip data.zip
-    ```
-
-* Move the dataset to the data directory
-
-    ```bash
-    mv data <DIR>/DA-FKD
+    ```url
+    https://github.com/zalandoresearch/fashion-mnist/tree/master/data
     ```
 
 #### Train the Teacher Model
