@@ -5,6 +5,13 @@ import random
 import numpy as np
 import torch
 import h5py
+from datasets import load_dataset
+from transformers import AutoTokenizer
+from datasets import Dataset
+from transformers import DataCollatorWithPadding
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+
+
 
 
 def read_data(train_data_dir, test_data_dir):
@@ -282,16 +289,77 @@ def load_partition_data_mnist(batch_size,
             train_data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
 
 def load_partition_distillation_data_mnist(batch_size,
-                                        client_num_in_total,
-                                        model_name,
-                                        alpha,
-                                        train_path="data/MNIST/train",
-                                        test_path="data/MNIST/test"):
+                                client_num_in_total,
+                                model_name,
+                                alpha,
+                                data_dir="data/MNIST/",
+                                ):
+    class_num = 10
 
-    users, groups, train_data, test_data = read_data(train_path, test_path)
-    new_users, new_train_data, new_test_data = noniid_merge_data_with_dirichlet_distribution(client_num_in_total,
-                                                                                             train_data, test_data,
-                                                                                             alpha)
+    def extract_data(filename, num_data, head_size, data_size):
+        with gzip.open(filename) as bytestream:
+            bytestream.read(head_size)
+            buf = bytestream.read(data_size * num_data)
+            data = np.frombuffer(buf, dtype=np.uint8).astype(np.float32)
+        return data
+
+    new_users = []
+    groups=[]
+    new_train_data = {}
+    all_train_data = {"x": [], "y": []}
+    new_test_data = {}
+    all_test_data = {"x": [], "y": []}
+    for i in range(client_num_in_total):
+        if i < class_num:
+            new_users.append("f_0000" + str(i))
+        else:
+            new_users.append("f_000" + str(i))
+
+    data = extract_data(data_dir + 'train-images-idx3-ubyte.gz', 60000, 16, 28 * 28)
+    trX = data.reshape((60000, 28, 28, 1))
+ 
+    data = extract_data(data_dir + 'train-labels-idx1-ubyte.gz', 60000, 8, 1)
+    trY = data.reshape((60000))
+ 
+    data = extract_data(data_dir + 't10k-images-idx3-ubyte.gz', 10000, 16, 28 * 28)
+    teX = data.reshape((10000, 28, 28, 1))
+ 
+    data = extract_data(data_dir + 't10k-labels-idx1-ubyte.gz', 10000, 8, 1)
+    teY = data.reshape((10000))
+
+    trX = np.asarray(trX).tolist()
+    teX = np.asarray(teX).tolist()
+    trY = np.asarray(trY).tolist()
+    teY = np.asarray(teY).tolist()
+
+    for i in range(len(trX)):
+        all_train_data['x'].append(remake_fashion_mnist(trX[i]))
+        all_train_data['y'].append(trY[i])
+
+    train_label_list = np.asarray(all_train_data["y"])
+    train_idx_map = non_iid_partition_with_dirichlet_distribution(train_label_list, client_num_in_total, class_num,
+                                                                 alpha)
+
+    for index, idx_list in train_idx_map.items():
+        key = new_users[index]
+        temp_data = {"x": [all_train_data["x"][i] for i in idx_list],
+                     "y": [all_train_data["y"][i] for i in idx_list]}
+        new_train_data[key] = temp_data
+
+    for i in range(len(teX)):
+        all_test_data['x'].append(remake_fashion_mnist(teX[i]))
+        all_test_data['y'].append(teY[i])
+
+    test_label_list = np.asarray(all_test_data["y"])
+    test_idx_map = non_iid_partition_with_dirichlet_distribution(test_label_list, client_num_in_total, class_num,
+                                                                 alpha)
+
+    for index, idx_list in test_idx_map.items():
+        key = new_users[index]
+        temp_data = {"x": [all_test_data["x"][i] for i in idx_list],
+                     "y": [all_test_data["y"][i] for i in idx_list]}
+        new_test_data[key] = temp_data        
+
     if len(groups) == 0:
         groups = [None for _ in new_users]
     train_data_num = 0
@@ -302,7 +370,7 @@ def load_partition_distillation_data_mnist(batch_size,
     train_data_global = list()
     test_data_global = list()
     client_idx = 0
-    logging.info("loading distillation data...")
+    logging.info("loading data...")
     for u, g in zip(new_users, groups):
         user_train_data_num = len(new_train_data[u]['x'])
         user_test_data_num = len(new_test_data[u]['x'])
@@ -319,11 +387,9 @@ def load_partition_distillation_data_mnist(batch_size,
         test_data_local_dict[client_idx] = test_batch
         train_data_global += train_batch
         test_data_global += test_batch
-
         client_idx += 1
 
     logging.info("finished the loading distillation data")
-    client_num = client_idx
     class_num = 10
 
     return test_data_global
@@ -346,7 +412,6 @@ def remake_fashion_mnist(pic,size=28):
             new_pic.append(pic[i][j][0])
 
     return remake(new_pic)
-
 
 def load_partition_data_fashion_mnist(batch_size,
                                 client_num_in_total,
@@ -1146,6 +1211,112 @@ class CIFAR100_truncated(data.Dataset):
 
     def __len__(self):
         return len(self.data)
+    
+class ToxicComments(data.Dataset):
+
+    def __init__(self, 
+                root="vmalperovich/toxic_comments", 
+                dataidxs=None, train=True, 
+                max_seq_length=128,
+                tokenizer=None):
+
+        self.root = root
+        self.dataset = load_dataset(self.root, split="train")
+        self.dataset = self.dataset.rename_column("label", "labels")
+        self.label_names = self.dataset.features["labels"].feature.names
+        self.max_seq_length = max_seq_length
+
+        self.get_ids2label = lambda ids: [self.label_names[t] for t in ids]
+        self.num_labels = len(self.label_names)
+        self.tokenizer = tokenizer
+        self.tokenize = lambda x: self.tokenizer(
+            x["text"], truncation=True, max_length=self.max_seq_length
+        )
+
+        self.labeled_size = 400
+        self.unlabeled_size = 3000
+        self.full_size = self.labeled_size + self.unlabeled_size
+        multiplier = int(np.log2(self.full_size / self.labeled_size)) - 1
+        self.multiplier = max(1, multiplier)
+        self.tokenized_data = self.gen_tokenized_data()
+
+    def get_bool_labels(self, labels, num_classes):
+        new_labels = np.zeros(num_classes, dtype=bool)
+        for i in labels:
+            new_labels[i] = True
+        return {"labels": new_labels}
+
+    def gen_tokenized_data(self):
+        tokenize = lambda x: self.tokenizer(
+            x["text"], truncation=True, max_length=self.max_seq_length
+        )
+        tokenized_dataset = self.dataset.map(tokenize, batched=True)
+        tokenized_dataset = tokenized_dataset.map(
+            lambda x: self.get_bool_labels(x["labels"], self.num_labels)
+        )
+        tokenized_dataset = tokenized_dataset.select_columns(
+            ["input_ids", "attention_mask", "labels"]
+        )
+
+        tokenized_train_df = tokenized_dataset["train"].to_pandas()
+        tokenized_train_df_labeled = tokenized_train_df.sample(self.labeled_size)
+        tokenized_train_df_labeled["labeled_mask"] = True
+
+        tokenized_train_df = tokenized_train_df.sample(self.unlabeled_size)
+        tokenized_train_df["labeled_mask"] = False
+        tokenized_train_df["labels"] = tokenized_train_df["labels"].apply(
+            lambda x: np.ones(self.num_labels, np.int64) * -100
+        )
+
+        for _ in range(self.multiplier):
+            tokenized_train_df = pd.concat([tokenized_train_df, tokenized_train_df_labeled])
+
+        tokenized_dataset["train"] = Dataset.from_pandas(
+            tokenized_train_df, preserve_index=False
+        )
+        tokenized_dataset["train_only_labeled"] = Dataset.from_pandas(
+            tokenized_train_df_labeled, preserve_index=False
+        )
+        return tokenized_dataset
+    
+    def __len__(self):
+        return len(self.tokenized_data["train"]+len(self.tokenized_data["train_only_labeled"]+len(self.tokenized_data["validation"])))
+    
+def get_dataloader_ToxicComments(datadir, train_bs, test_bs, dataidxs1=None, dataidxs2=None):
+    dl_obj = ToxicComments
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    np.random.seed(42)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    tokenized_dataset = dl_obj(datadir, dataidxs=dataidxs1, tokenizer=tokenizer)
+    
+    train_dl = DataLoader(
+        tokenized_dataset["train_only_labeled"],
+        batch_size=train_bs,
+        sampler=RandomSampler(tokenized_dataset["train_only_labeled"]),
+        collate_fn=data_collator,
+        pin_memory=True,
+    )
+
+    test_dl = DataLoader(
+        tokenized_dataset["validation"],
+        batch_size=test_bs,
+        sampler=SequentialSampler(tokenized_dataset["validation"]),
+        collate_fn=data_collator,
+        pin_memory=True,
+    )
+    train_data = list()
+    for batch_idx, (batched_x, batched_y) in enumerate(train_dl):
+        batched_x = torch.from_numpy(np.asarray(batched_x)).float()
+        batched_y = torch.from_numpy(np.asarray(batched_y)).long()
+        train_data.append((batched_x, batched_y))
+
+    test_data = list()
+    for batch_idx, (batched_x, batched_y) in enumerate(test_dl):
+        batched_x = torch.from_numpy(np.asarray(batched_x)).float()
+        batched_y = torch.from_numpy(np.asarray(batched_y)).long()
+        test_data.append((batched_x, batched_y))
+    return train_data, test_data
 
 if __name__ == '__main__':
     logging.basicConfig()

@@ -177,7 +177,6 @@ def load_distillation_data(args,dataset_name):
         logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
         distillation_data = load_partition_distillation_data_cifar10(args.batch_size, args.client_num_in_total, args.alpha)   
 
-
     if dataset_name == "mnist":
         logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
         distillation_data = load_partition_distillation_data_mnist(args.batch_size, args.client_num_in_total, args.model, args.alpha)
@@ -190,13 +189,12 @@ def load_distillation_data(args,dataset_name):
     return filter_data
 
 
-
 def create_model(args, model_name, output_dim):
     logging.info("create_model. model_name = %s, output_dim = %s" % (model_name, output_dim))
     model = None
 
     if model_name == "DaFKD":
-        model = MTL(class_num=output_dim)
+        model = MTL(type=args.type, class_num=output_dim)
 
     return model
 
@@ -228,13 +226,18 @@ if __name__ == "__main__":
 
     # load data
     dataset = load_data(args, args.dataset)
+    print('Dataset loaded.')
+
+    # load distillation data
+    distillation_data = load_distillation_data(args, args.distillation_dataset)
+    print('Distillation Dataset loaded.')
 
     model = create_model(args, model_name=args.model, output_dim=dataset[7])
 
     mtl_model_trainer = ModelTrainerMTL(model=model,args=args)
 
     if args.baseline == "DaFKD": 
-        fedavgAPI = DaFKD(dataset, device, args, mtl_model_trainer)
+        fedavgAPI = DaFKD(dataset, distillation_data, device, args, mtl_model_trainer)
         torch.cuda.empty_cache()
         # torch.cuda.set_per_process_memory_fraction(0.5)
         fedavgAPI.train()

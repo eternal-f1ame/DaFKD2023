@@ -6,10 +6,9 @@ from torch import nn
 from torch.autograd import Variable
 from torchvision.utils import save_image
 import os
-from model.gan import Generator,GeneratorCifar,weights_init
+from model.cv.generator import Generator, GeneratorCifar, weights_init
 from model.model_multitask import MTL
 from torchinfo import summary
-
 
 class ModelTrainer:
     def __init__(self, model,args=None):

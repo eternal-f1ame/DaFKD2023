@@ -6,9 +6,9 @@
 
 #### System Requirements
 
-* OS: Ubuntu 20.04/22.04
+* OS: Ubuntu 20.04/22.04 / Windows 10/11
 * Python: >=3.6
-* conda: >=4.10.1
+* conda: >=23.0.0
 * Follow the steps below to install the required packages
 
 ```bash

@@ -8,11 +8,13 @@ from utils import transform_list_to_tensor
 from client import Client
 
 class DaFKD(object):
-    def __init__(self, dataset, device, args, model_trainer):
+    def __init__(self, dataset, distillation_dataset, device, args, model_trainer):
         self.device = device
         self.args = args
         [train_data_num, test_data_num, train_data_global, test_data_global,
          train_data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num] = dataset
+        self.distillation_data = distillation_dataset
+        
         self.train_global = train_data_global
         self.test_global = test_data_global
         self.val_global = None
@@ -57,11 +59,10 @@ class DaFKD(object):
                 global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension,1,1)
             else:
                 global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension)
-            # global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension)
 
             self.val_global = self.model_trainer.get_distillation_share_data(global_noise,self.device)
 
-            # self._generate_validation_set()
+            self._generate_validation_set()
             w_locals = []
            
             self._client_sampling(round_idx, self.args.client_num_in_total,
@@ -149,13 +150,12 @@ class DaFKD(object):
             num_clients = min(client_num_per_round, client_num_in_total)
             np.random.seed(round_idx)  # make sure for each comparison, we are selecting the same clients each round
             self.client_indexes = np.random.choice(range(client_num_in_total), num_clients, replace=False)
-        # return client_indexes
 
-    # def _generate_validation_set(self, num_samples=6000):
-    #     num = num_samples // self.args.batch_size
-    #     test_data_num = len(self.distillation_data)
-    #     sample_indices = random.sample(range(test_data_num), min(num, test_data_num))
-    #     self.val_global = torch.utils.data.Subset(self.distillation_data, sample_indices)
+    def _generate_validation_set(self, num_samples=6000):
+        num = num_samples // self.args.batch_size
+        test_data_num = len(self.distillation_data)
+        sample_indices = random.sample(range(test_data_num), min(num, test_data_num))
+        self.val_global = torch.utils.data.Subset(self.distillation_data, sample_indices)
 
 
     def _aggregate(self, w_locals,round_idx):

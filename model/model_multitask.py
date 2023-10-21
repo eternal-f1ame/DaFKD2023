@@ -2,8 +2,15 @@ import torch
 import torch.nn as nn
 import copy
 
-def MTL(class_num, pretrained=False, path=None, **kwargs):
-    model = MTLResNet(Bottleneck, [2,2,2], class_num, **kwargs)
+def MTL(type, class_num, pretrained=False, path=None, **kwargs):
+    if type == 'cv':
+        model = MTLResNet(Bottleneck, [2,2,2], class_num, **kwargs)
+    elif type == 'nlp':
+        from transformers import BertModel
+        bert = BertModel.from_pretrained('bert-base-uncased')
+        model = MTLBert(bert, class_num, **kwargs)
+    else:
+        raise NotImplementedError
     return model
 
 class Reshape(nn.Module):
@@ -14,18 +21,17 @@ class Reshape(nn.Module):
     def forward(self,x):
         return x.view(x.size(0),-1)
 
-
 class MTLResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=10, groups=1, width_per_group=64):
         super(MTLResNet, self).__init__()
-        
+
         self._norm_layer = nn.BatchNorm2d
         self.inplanes = 16
         self.dilation = 1
         self.groups = groups
         self.base_width = width_per_group
-        
+
         self.sharedlayer = nn.Sequential(
             nn.Conv2d(1, self.inplanes, kernel_size=3, stride=1, padding=1,bias=False),
             nn.BatchNorm2d(self.inplanes),
@@ -33,7 +39,7 @@ class MTLResNet(nn.Module):
             self._make_layer(block, 16, layers[0]),
             self._make_layer(block, 32, layers[1], stride=2),
             self._make_layer(block, 64, layers[2], stride=2)# batchsize,256,7,7
-           
+
         )
 
         self.classify = nn.Sequential(   
@@ -45,12 +51,7 @@ class MTLResNet(nn.Module):
         self.discriminator = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)) ,  
             Reshape(),
-            # nn.AvgPool2d(2,stride=2), # batchsize, 16 ,14 ,14
-            # Reshape(),
-            # nn.Linear(16*14*14, 1024),
             nn.Linear(64 * block.expansion,1),
-            # nn.LeakyReLU(0.2, True),
-            # nn.Linear(32, 1),
             nn.Sigmoid()
         )
 
@@ -89,8 +90,6 @@ class MTLResNet(nn.Module):
 
     def forward(self, x):
         x = self.sharedlayer(x)
-        # x = x.view(x.size(0), -1) 
-        # print(x.size())
         out_c = self.classify(x)
         out_d = self.discriminator(x)
         return out_c,out_d
@@ -148,3 +147,28 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+class MTLBert(nn.Module):
+    def __init__(self, bert, num_classes=10, freeze_bert=False, **kwargs):
+        super(MTLBert, self).__init__()
+        self.bert = bert
+        self.classifier = nn.Sequential(
+            nn.Linear(bert.config.hidden_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, num_classes)
+        )
+        self.discriminator = nn.Sequential(
+            nn.Linear(bert.config.hidden_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+            nn.Sigmoid()
+        )
+        if freeze_bert:
+            for p in self.bert.parameters():
+                p.requires_grad = False
+
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
+        outputs = self.bert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+        out_c = self.classifier(outputs[1])
+        out_d = self.discriminator(outputs[1])
+        return out_c, out_d
