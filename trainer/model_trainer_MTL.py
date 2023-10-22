@@ -4,15 +4,10 @@ import copy
 import torch
 from torch import nn
 from torch.autograd import Variable
-from torchvision.utils import save_image
-import os
 from model.cv.generator import Generator, GeneratorCifar, weights_init
-from model.model_multitask import MTL
-from torchinfo import summary
 
 class ModelTrainer:
     def __init__(self, model,args=None):
-        # self.model_g = Generator(args.noise_dimension, 1 * 56 * 56)
         self.model_g = GeneratorCifar(args.noise_dimension)
         self.model_d = model
         self.id = 0
@@ -27,7 +22,7 @@ class ModelTrainer:
 
     def get_model_params_all(self):
         return self.model_d.cpu().state_dict()
-    
+
     def set_model_params_all(self,model_parameters):
         self.model_d.load_state_dict(model_parameters)
 
@@ -36,7 +31,7 @@ class ModelTrainer:
         self.model_g.load_state_dict(model_g_parameters)
         self.model_d.sharedlayer.load_state_dict(model_shared_parameters)
         self.model_d.classify.load_state_dict(model_c_parameters)
-        
+
 
     def get_distillation_share_data(self, global_noise, device):
         model_g = self.model_g

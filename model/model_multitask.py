@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import copy
 
-def MTL(type, class_num, pretrained=False, path=None, **kwargs):
-    if type == 'cv':
+def MTL(dom, class_num, pretrained=False, path=None, **kwargs):
+    if dom == 'cv':
         model = MTLResNet(Bottleneck, [2,2,2], class_num, **kwargs)
-    elif type == 'nlp':
+    elif dom == 'nlp':
         from transformers import BertModel
         bert = BertModel.from_pretrained('bert-base-uncased')
         model = MTLBert(bert, class_num, **kwargs)

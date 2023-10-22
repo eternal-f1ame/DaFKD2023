@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
-from transformers import AutoModel, AutoTokenizer, AutoConfig
+from transformers import AutoModel, AutoTokenizer
 from transformers.modeling_utils import SequenceSummary
-
-from typing import Optional, Tuple, Dict
+from typing import Optional, Dict
 
 from base import BaseModel
 from model.utils import ClassifierOutput, CustomAttention
