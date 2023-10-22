@@ -29,6 +29,9 @@ def add_args(parser):
     parser.add_argument('--model', type=str, default='resnet56', metavar='N',
                         help='neural network used in training')
 
+    parser.add_argument('--dom', type=str, default='cv', metavar='N',
+                        help='Domain of the Task')
+
     parser.add_argument('--dataset', type=str, default='cifar10', metavar='N',
                         help='dataset used for training')
 
@@ -194,7 +197,7 @@ def create_model(args, model_name, output_dim):
     model = None
 
     if model_name == "DaFKD":
-        model = MTL(type=args.type, class_num=output_dim)
+        model = MTL(dom=args.dom, class_num=output_dim)
 
     return model
 

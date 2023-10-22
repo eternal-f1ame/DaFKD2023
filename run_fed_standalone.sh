@@ -41,7 +41,7 @@ BASELINE="DaFKD"
 
 
 CUDA_VISIBLE_DEVICES=0 python -B main_fed.py --gpu $GPU --dataset $DATASET \
-    --model $MODEL --partition_method $DISTRIBUTION --alpha $ALPHA --type $TYPE\
+    --model $MODEL --partition_method $DISTRIBUTION --alpha $ALPHA --dom $TYPE\
     --aggregation_method $AGGREGATION --client_num_in_total $CLIENT_NUM \
     --client_num_per_round $WORKER_NUM --comm_round $ROUND --epochs $EPOCH \
     --client_optimizer $CLIENT_OPTIMIZER --batch_size $BATCH_SIZE \
