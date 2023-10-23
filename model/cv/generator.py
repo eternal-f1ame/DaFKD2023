@@ -39,9 +39,9 @@ def weights_init(m):
         nn.init.normal_(m.weight, 1.0, 0.02)
         nn.init.constant_(m.bias, 0)
         
-class GeneratorCifar(nn.Module):
+class GeneratorMNIST(nn.Module):
     def __init__(self, noise_dimension):
-        super(GeneratorCifar, self).__init__()
+        super(GeneratorMNIST, self).__init__()
         self.noise_dimension = noise_dimension
         self.n_channel = 1
         self.n_g_feature = 64

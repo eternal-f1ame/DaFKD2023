@@ -6,11 +6,12 @@ import sys
 import datetime
 import numpy as np
 import torch
+from copy import copy
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
-from data_loader import load_partition_data_mnist,load_partition_distillation_data_emnist,load_partition_data_cifar10,load_partition_distillation_data_cifar100,load_partition_data_emnist,load_partition_distillation_data_mnist
-from data_loader import load_partition_data_fashion_mnist,load_partition_data_svhn,load_partition_distillation_data_cifar10,load_partition_data_ToxCom
+from data_loader import load_partition_data_mnist,load_partition_distillation_data_emnist,load_partition_data_emnist,load_partition_distillation_data_mnist
+from data_loader import load_partition_data_fashion_mnist,load_partition_data_ToxCom
 
 from DaFKD import DaFKD
 from model.model_multitask import MTL
@@ -32,14 +33,11 @@ def add_args(parser):
     parser.add_argument('--dom', type=str, default='cv', metavar='N',
                         help='Domain of the Task')
 
-    parser.add_argument('--dataset', type=str, default='cifar10', metavar='N',
+    parser.add_argument('--dataset', type=str, default='mnist', metavar='N',
                         help='dataset used for training')
 
     parser.add_argument('--distillation_dataset', type=str, default='emnist', metavar='N',
                         help='dataset used for distillation')
-
-    # parser.add_argument('--data_dir', type=str, default='./../../../data/cifar10',
-    #                     help='data directory')
 
     parser.add_argument('--partition_method', type=str, default='hetero', metavar='N',
                         help='how to partition the dataset on local workers')
@@ -130,30 +128,11 @@ def load_data(args, dataset_name):
         train_data_local_num_dict, train_data_local_dict, test_data_local_dict, \
         class_num = load_partition_data_fashion_mnist(args.batch_size, args.client_num_in_total, args.model, args.alpha)
 
-    elif dataset_name == "svhn":
-        logging.info("load_data. dataset_name = %s" % dataset_name)
-        client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
-        train_data_local_num_dict, train_data_local_dict, test_data_local_dict, \
-        class_num = load_partition_data_svhn(args.batch_size, args.client_num_in_total, args.alpha)
-
     elif dataset_name == "vmalperovich/toxic_comments":
         logging.info("load_data. dataset_name = %s" % dataset_name)
         client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
         train_data_local_num_dict, train_data_local_dict, test_data_local_dict, \
         class_num = load_partition_data_ToxCom(args.dataset, args.batch_size, args.client_num_in_total, args.alpha)
-
-    elif dataset_name == "cifar10":
-        logging.info("load_data. dataset_name = %s" % dataset_name)
-        
-        client_num,\
-        train_data_num,\
-        test_data_num,\
-        train_data_global,\
-        test_data_global,\
-        train_data_local_num_dict,\
-        train_data_local_dict,\
-        test_data_local_dict,\
-        class_num = load_partition_data_cifar10(args.batch_size, args.client_num_in_total, args.alpha)
 
     elif dataset_name == "emnist":
         logging.info("load_data. dataset_name = %s" % dataset_name)
@@ -176,14 +155,6 @@ def load_distillation_data(args,dataset_name):
     if dataset_name == "emnist":
         logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
         distillation_data = load_partition_distillation_data_emnist(args.batch_size, args.client_num_in_total, args.model, args.alpha)
-
-    if dataset_name == "cifar100":
-        logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
-        distillation_data = load_partition_distillation_data_cifar100(args.batch_size, args.client_num_in_total, args.alpha)
-
-    if dataset_name == "cifar10":
-        logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
-        distillation_data = load_partition_distillation_data_cifar10(args.batch_size, args.client_num_in_total, args.alpha)   
 
     if dataset_name == "mnist":
         logging.info("load_distillation_data. dataset_name = %s" % dataset_name)
@@ -241,8 +212,29 @@ if __name__ == "__main__":
     print('Distillation Dataset loaded.')
 
     model = create_model(args, model_name=args.model, output_dim=dataset[7])
+    if args.dom == "cv":
+        mtl_model_trainer = CVTrainer(model=model,args=args)
+    elif args.dom == "nlp":
+        CONFIG = dict(
+            TASK="multi-label",
+            frozen_backbone=False,
+            batch_size=32,
+            max_seq_length=24,
+            noise_size=args.noise_dimension,
+            lr_discriminator=args.es_lr,
+            lr_generator=args.lr,
+            epsilon=1e-8,
+            num_train_epochs=args.epochs,
+            dropout_rate=0.2,
+            apply_scheduler=True,
+            fake_label_index=-1
+        )
 
-    mtl_model_trainer = CVTrainer(model=model,args=args)
+        GAN_CONFIG = copy(CONFIG)
+        GAN_CONFIG["noise_type"] = "normal"
+        GAN_CONFIG["noise_range"] = (0, 1)
+
+        mtl_model_trainer = NLPTrainer(model=model,args=args,config=GAN_CONFIG)
 
     if args.baseline == "DaFKD": 
         fedavgAPI = DaFKD(dataset, distillation_data, device, args, mtl_model_trainer)

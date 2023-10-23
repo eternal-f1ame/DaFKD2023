@@ -118,6 +118,7 @@ class ClassifierOutput(OrderedDict):
     probs: torch.FloatTensor = None
     fake_probs: torch.FloatTensor = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    alpha: Optional[torch.FloatTensor] = None
 
     def __repr__(self):
         kws = [f"{key}={type(value).__name__}" for key, value in self.__dict__.items()]

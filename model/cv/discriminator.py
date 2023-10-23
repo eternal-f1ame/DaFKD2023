@@ -30,9 +30,9 @@ class Discriminator(nn.Module):
         x = self.fc(x)
         return x
 
-class DiscriminatorCifar(nn.Module):
+class DiscriminatorMNIST(nn.Module):
     def __init__(self):
-        super(DiscriminatorCifar, self).__init__()
+        super(DiscriminatorMNIST, self).__init__()
         self.n_channel = 3
         self.n_d_feature = 64
         self.module = nn.Sequential(

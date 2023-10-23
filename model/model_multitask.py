@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
-from torch.nn import CrossEntropyLoss
-from transformers import AutoModel, AutoTokenizer
-from transformers.modeling_utils import SequenceSummary
+from transformers import AutoModel
 from typing import Optional, Dict
 from model.nlp.discriminator import Bone
-from model.nlp.utils import ClassifierOutput, CustomAttention
+from model.nlp.utils import ClassifierOutput
 
 def MTL(dom, class_num, pretrained=False, path=None, **kwargs):
     if dom == 'cv':
@@ -48,13 +46,13 @@ class MTLResNet(nn.Module):
         )
 
         self.classify = nn.Sequential(   
-            nn.AdaptiveAvgPool2d((1, 1)) ,  
+            nn.AdaptiveAvgPool2d((1, 1)),
             Reshape(),
             nn.Linear(64 * block.expansion, num_classes)
         )
 
         self.discriminator = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)) ,  
+            nn.AdaptiveAvgPool2d((1, 1)),
             Reshape(),
             nn.Linear(64 * block.expansion,1),
             nn.Sigmoid()
@@ -153,6 +151,15 @@ def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+
+class Reshape_(nn.Module):
+    def __init__(self,*args):
+        super(Reshape_,self).__init__()
+        self.shape = args
+    
+    def forward(self,x):
+        return x[:,[-1]]
+
 class MTLBert(Bone):
     def __init__(
         self,
@@ -174,12 +181,15 @@ class MTLBert(Bone):
             else None
         )
         self.dropout = nn.Dropout(dropout_rate if classifier_dropout is None else classifier_dropout)
-        if gan_training:
-            self.classifier = nn.Linear(self.encoder.config.hidden_size, num_labels + 1)
-            self.discriminator = nn.Linear(self.encoder.config.hidden_size, 1)  # 1 for real, 0 for fake
-        else:
-            self.classifier = nn.Linear(self.encoder.config.hidden_size, num_labels)
         self.sigmoid = nn.Sigmoid()
+        self.classifier = nn.Sequential(
+            nn.Linear(self.encoder.config.hidden_size, num_labels + 1),
+            )
+        self.discriminator = nn.Sequential(
+            nn.Linear(self.encoder.config.hidden_size, 1),
+            Reshape_(),      
+            nn.Sigmoid()
+            )
         self.loss_fct = nn.BCEWithLogitsLoss()
         self.epsilon = epsilon
         self.gan_training = gan_training
@@ -195,31 +205,24 @@ class MTLBert(Bone):
         labels: Optional[torch.Tensor] = None,
         labeled_mask: Optional[torch.Tensor] = None,
         **kwargs,
-    ) -> (ClassifierOutput, ClassifierOutput):
-
+    ):
         outputs = self.safe_encoder(
             input_ids=input_ids, attention_mask=input_mask, token_type_ids=token_type_ids
         )
         sequence_output = outputs.last_hidden_state[:, 0]  # get CLS embedding
+
         if external_states is not None:
             sequence_output = torch.cat([sequence_output, external_states], dim=0)
-
         sequence_output_drop = self.dropout(sequence_output)
         logits = self.classifier(sequence_output_drop)
-        fake_probs, fake_logits = None, None
-        if self.gan_training:
-            logits_d = self.discriminator(sequence_output_drop)
-            fake_logits = logits[:, [-1]]
-            fake_probs = self.sigmoid(fake_logits)
-            logits = logits[:, :-1]
-            logits_d = logits_d[:, [-1]]
+        fake_logits = logits[:, [-1]]
+        fake_probs = self.sigmoid(fake_logits)
+        logits = logits[:, :-1]
         probs = self.sigmoid(logits)
-        probd = self.sigmoid(logits_d)
-
-        loss_c = self.compute_loss(
+        alpha = self.discriminator(sequence_output_drop)
+        loss = self.compute_loss(
             logits=logits, probs=probs, fake_probs=fake_probs, labels=labels, labeled_mask=labeled_mask
         )
-        loss_d = self.compute_loss(logits=logits_d, fake_logits=fake_logits)
         return ClassifierOutput(
             loss=loss["real_loss"],
             fake_loss=loss["fake_loss"],
@@ -228,6 +231,7 @@ class MTLBert(Bone):
             probs=probs,
             fake_probs=fake_probs,
             hidden_states=sequence_output,
+            alpha=alpha
         )
 
     def compute_loss(
@@ -247,7 +251,7 @@ class MTLBert(Bone):
                 logits = logits[labeled_mask]
                 labels = labels[labeled_mask]
             if logits.shape[0] > 0:
-                real_loss = self.loss_fct(logits, labels.float())
+                real_loss = self.loss_fct(logits, labels)
         if self.gan_training:
             fake_loss = -torch.mean(torch.log(fake_probs + self.epsilon))
         return {"real_loss": real_loss, "fake_loss": fake_loss}

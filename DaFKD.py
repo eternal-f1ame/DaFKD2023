@@ -55,10 +55,7 @@ class DaFKD(object):
             w_global = self.model_trainer.get_model_params()
             
             logging.info("################Communication round : {}".format(round_idx))
-            if self.args.dataset == 'cifar10':
-                global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension,1,1)
-            else:
-                global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension)
+            global_noise = torch.randn(self.args.ed_epoch,self.args.batch_size,self.args.noise_dimension)
 
             self.val_global = self.model_trainer.get_distillation_share_data(global_noise,self.device)
 
