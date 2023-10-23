@@ -5,11 +5,11 @@ from transformers import AutoModel, AutoTokenizer
 from transformers.modeling_utils import SequenceSummary
 from typing import Optional, Dict
 
-from base import BaseModel
-from model.utils import ClassifierOutput, CustomAttention
+from model.base import BaseModel
+from model.nlp.utils import ClassifierOutput, CustomAttention
 
 
-class Discriminator(BaseModel):
+class Bone(BaseModel):
     def get_tokenizer(self) -> AutoTokenizer:
         return AutoTokenizer.from_pretrained(self.encoder_name)
 
@@ -23,7 +23,7 @@ class Discriminator(BaseModel):
         return self.encoder(token_type_ids=token_type_ids, *args, **kwargs)
 
 
-class DiscriminatorForSequenceClassification(Discriminator):
+class DiscriminatorForSequenceClassification(Bone):
     """Discriminator model for sequence classification tasks with transformer backbone"""
 
     def __init__(
@@ -127,7 +127,7 @@ class DiscriminatorForSequenceClassification(Discriminator):
         return {"real_loss": real_loss, "fake_loss": fake_loss}
 
 
-class DiscriminatorForMultiLabelClassification(Discriminator):
+class DiscriminatorForMultiLabelClassification(Bone):
     """Discriminator model for sequence classification tasks with transformer backbone"""
 
     def __init__(
@@ -227,7 +227,7 @@ class DiscriminatorForMultiLabelClassification(Discriminator):
         return {"real_loss": real_loss, "fake_loss": fake_loss}
 
 
-class DiscriminatorForMultipleChoice(Discriminator):
+class DiscriminatorForMultipleChoice(Bone):
     """Discriminator model for sequence classification tasks with transformer backbone"""
 
     def __init__(
@@ -348,7 +348,7 @@ class DiscriminatorForMultipleChoice(Discriminator):
         return {"real_loss": real_loss, "fake_loss": fake_loss}
 
 
-class DiscriminatorForTokenClassification(Discriminator):
+class DiscriminatorForTokenClassification(Bone):
     """Discriminator model for token classification tasks with transformer backbone"""
 
     def __init__(
@@ -453,7 +453,7 @@ class DiscriminatorForTokenClassification(Discriminator):
         return {"real_loss": real_loss, "fake_loss": fake_loss}
 
 
-class DiscriminatorForContextTokenClassification(Discriminator):
+class DiscriminatorForContextTokenClassification(Bone):
     """Discriminator model for token classification tasks with transformer backbone"""
 
     def __init__(

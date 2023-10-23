@@ -1,6 +1,11 @@
 import torch
 import torch.nn as nn
-import copy
+from torch.nn import CrossEntropyLoss
+from transformers import AutoModel, AutoTokenizer
+from transformers.modeling_utils import SequenceSummary
+from typing import Optional, Dict
+from model.nlp.discriminator import Bone
+from model.nlp.utils import ClassifierOutput, CustomAttention
 
 def MTL(dom, class_num, pretrained=False, path=None, **kwargs):
     if dom == 'cv':
@@ -148,27 +153,101 @@ def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
-class MTLBert(nn.Module):
-    def __init__(self, bert, num_classes=10, freeze_bert=False, **kwargs):
+class MTLBert(Bone):
+    def __init__(
+        self,
+        encoder_name: str,
+        num_labels: int = 4,
+        dropout_rate: Optional[float] = 0.15,
+        ce_ignore_index: Optional[int] = -100,
+        epsilon: Optional[float] = 1e-8,
+        gan_training: bool = False,
+        **kwargs,
+    ):
         super(MTLBert, self).__init__()
-        self.bert = bert
-        self.classifier = nn.Sequential(
-            nn.Linear(bert.config.hidden_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_classes)
+        self.num_labels = num_labels
+        self.encoder_name = encoder_name
+        self.encoder = AutoModel.from_pretrained(encoder_name)
+        classifier_dropout = (
+            self.encoder.config.classifier_dropout
+            if hasattr(self.encoder.config, "classifier_dropout")
+            else None
         )
-        self.discriminator = nn.Sequential(
-            nn.Linear(bert.config.hidden_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
-        if freeze_bert:
-            for p in self.bert.parameters():
-                p.requires_grad = False
+        self.dropout = nn.Dropout(dropout_rate if classifier_dropout is None else classifier_dropout)
+        if gan_training:
+            self.classifier = nn.Linear(self.encoder.config.hidden_size, num_labels + 1)
+            self.discriminator = nn.Linear(self.encoder.config.hidden_size, 1)  # 1 for real, 0 for fake
+        else:
+            self.classifier = nn.Linear(self.encoder.config.hidden_size, num_labels)
+        self.sigmoid = nn.Sigmoid()
+        self.loss_fct = nn.BCEWithLogitsLoss()
+        self.epsilon = epsilon
+        self.gan_training = gan_training
+        if self.gan_training:
+            print("Training with GAN mode on!")
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
-        outputs = self.bert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
-        out_c = self.classifier(outputs[1])
-        out_d = self.discriminator(outputs[1])
-        return out_c, out_d
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        input_mask: Optional[torch.Tensor] = None,
+        external_states: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        labeled_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> (ClassifierOutput, ClassifierOutput):
+
+        outputs = self.safe_encoder(
+            input_ids=input_ids, attention_mask=input_mask, token_type_ids=token_type_ids
+        )
+        sequence_output = outputs.last_hidden_state[:, 0]  # get CLS embedding
+        if external_states is not None:
+            sequence_output = torch.cat([sequence_output, external_states], dim=0)
+
+        sequence_output_drop = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output_drop)
+        fake_probs, fake_logits = None, None
+        if self.gan_training:
+            logits_d = self.discriminator(sequence_output_drop)
+            fake_logits = logits[:, [-1]]
+            fake_probs = self.sigmoid(fake_logits)
+            logits = logits[:, :-1]
+            logits_d = logits_d[:, [-1]]
+        probs = self.sigmoid(logits)
+        probd = self.sigmoid(logits_d)
+
+        loss_c = self.compute_loss(
+            logits=logits, probs=probs, fake_probs=fake_probs, labels=labels, labeled_mask=labeled_mask
+        )
+        loss_d = self.compute_loss(logits=logits_d, fake_logits=fake_logits)
+        return ClassifierOutput(
+            loss=loss["real_loss"],
+            fake_loss=loss["fake_loss"],
+            logits=logits,
+            fake_logits=fake_logits,
+            probs=probs,
+            fake_probs=fake_probs,
+            hidden_states=sequence_output,
+        )
+
+    def compute_loss(
+        self,
+        logits: torch.Tensor,
+        fake_logits: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        probs: Optional[torch.Tensor] = None,
+        fake_probs: Optional[torch.Tensor] = None,
+        labeled_mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.FloatTensor]:
+        real_loss = torch.FloatTensor([0]).to(self.encoder.device)
+        fake_loss = torch.FloatTensor([0]).to(self.encoder.device)
+        if labels is not None:
+            if labeled_mask is not None:
+                labeled_mask = labeled_mask.bool()
+                logits = logits[labeled_mask]
+                labels = labels[labeled_mask]
+            if logits.shape[0] > 0:
+                real_loss = self.loss_fct(logits, labels.float())
+        if self.gan_training:
+            fake_loss = -torch.mean(torch.log(fake_probs + self.epsilon))
+        return {"real_loss": real_loss, "fake_loss": fake_loss}

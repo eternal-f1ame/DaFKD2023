@@ -10,11 +10,11 @@ import torch
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
 from data_loader import load_partition_data_mnist,load_partition_distillation_data_emnist,load_partition_data_cifar10,load_partition_distillation_data_cifar100,load_partition_data_emnist,load_partition_distillation_data_mnist
-from data_loader import load_partition_data_fashion_mnist,load_partition_data_svhn,load_partition_distillation_data_cifar10
+from data_loader import load_partition_data_fashion_mnist,load_partition_data_svhn,load_partition_distillation_data_cifar10,load_partition_data_ToxCom
 
 from DaFKD import DaFKD
 from model.model_multitask import MTL
-from trainer.model_trainer_MTL import ModelTrainer as ModelTrainerMTL
+from model.model_trainer_MTL import CVTrainer, NLPTrainer
 
 import warnings
  
@@ -136,6 +136,11 @@ def load_data(args, dataset_name):
         train_data_local_num_dict, train_data_local_dict, test_data_local_dict, \
         class_num = load_partition_data_svhn(args.batch_size, args.client_num_in_total, args.alpha)
 
+    elif dataset_name == "vmalperovich/toxic_comments":
+        logging.info("load_data. dataset_name = %s" % dataset_name)
+        client_num, train_data_num, test_data_num, train_data_global, test_data_global, \
+        train_data_local_num_dict, train_data_local_dict, test_data_local_dict, \
+        class_num = load_partition_data_ToxCom(args.dataset, args.batch_size, args.client_num_in_total, args.alpha)
 
     elif dataset_name == "cifar10":
         logging.info("load_data. dataset_name = %s" % dataset_name)
@@ -237,7 +242,7 @@ if __name__ == "__main__":
 
     model = create_model(args, model_name=args.model, output_dim=dataset[7])
 
-    mtl_model_trainer = ModelTrainerMTL(model=model,args=args)
+    mtl_model_trainer = CVTrainer(model=model,args=args)
 
     if args.baseline == "DaFKD": 
         fedavgAPI = DaFKD(dataset, distillation_data, device, args, mtl_model_trainer)

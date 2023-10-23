@@ -2,16 +2,19 @@ import json
 import logging
 import os
 import random
+import h5py
 import numpy as np
 import torch
-import h5py
+import pandas as pd
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from datasets import Dataset
 from transformers import DataCollatorWithPadding
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
-
-
+import logging
+import torch.utils.data as data
+import torchvision.transforms as transforms
+from torchvision.datasets import CIFAR10, CIFAR100, SVHN
 
 
 def read_data(train_data_dir, test_data_dir):
@@ -51,7 +54,7 @@ def batch_data(data, batch_size, model_name):
     data_y = data['y']
 
     if model_name != "lr":
-        data_x = np.array(data_x).reshape(-1, 1, 28, 28)
+        data_x = np.array(data_x).reshape((-1, 1, 28, 28))
 
     # randomly shuffle data
     np.random.seed(100)
@@ -554,7 +557,7 @@ def load_partition_data_emnist(batch_size,
         train_ids = client_ids_train[:]
     else:
         # get ids of single client
-        train_ids = [client_ids_train[client_idx]]
+        train_ids = [client_ids_train[client_idx]] 
         
     for client_id in train_ids:
         temp = train_h5[_EXAMPLE][client_id][_LABEL][()]
@@ -706,15 +709,6 @@ def load_partition_distillation_data_emnist(batch_size,
 
     logging.info("finish loading distillation_data...")
     return test_data_global
-
-import logging
-
-import numpy as np
-import torch.utils.data as data
-import torch
-import torchvision.transforms as transforms
-from torchvision.datasets import CIFAR10,CIFAR100,SVHN
-from torchvision.utils import save_image
 
 
 def load_partition_data_svhn(batch_size, client_number, partition_alpha,
@@ -1211,19 +1205,21 @@ class CIFAR100_truncated(data.Dataset):
 
     def __len__(self):
         return len(self.data)
-    
+
 class ToxicComments(data.Dataset):
 
     def __init__(self, 
                 root="vmalperovich/toxic_comments", 
-                dataidxs=None, train=True, 
+                dataidxs=None, 
                 max_seq_length=128,
-                tokenizer=None):
+                tokenizer=None,
+                split="train"):
 
         self.root = root
-        self.dataset = load_dataset(self.root, split="train")
+        self.split = split
+        self.dataset = load_dataset(self.root)
         self.dataset = self.dataset.rename_column("label", "labels")
-        self.label_names = self.dataset.features["labels"].feature.names
+        self.label_names = self.dataset["train"].features["labels"].feature.names
         self.max_seq_length = max_seq_length
 
         self.get_ids2label = lambda ids: [self.label_names[t] for t in ids]
@@ -1257,6 +1253,7 @@ class ToxicComments(data.Dataset):
         tokenized_dataset = tokenized_dataset.select_columns(
             ["input_ids", "attention_mask", "labels"]
         )
+        print(tokenized_dataset)
 
         tokenized_train_df = tokenized_dataset["train"].to_pandas()
         tokenized_train_df_labeled = tokenized_train_df.sample(self.labeled_size)
@@ -1272,36 +1269,40 @@ class ToxicComments(data.Dataset):
             tokenized_train_df = pd.concat([tokenized_train_df, tokenized_train_df_labeled])
 
         tokenized_dataset["train"] = Dataset.from_pandas(
-            tokenized_train_df, preserve_index=False
-        )
-        tokenized_dataset["train_only_labeled"] = Dataset.from_pandas(
             tokenized_train_df_labeled, preserve_index=False
         )
         return tokenized_dataset
     
     def __len__(self):
-        return len(self.tokenized_data["train"]+len(self.tokenized_data["train_only_labeled"]+len(self.tokenized_data["validation"])))
+        return len(self.tokenized_data[self.split])
     
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        return self.tokenized_data[self.split][idx]
+
+
+
 def get_dataloader_ToxicComments(datadir, train_bs, test_bs, dataidxs1=None, dataidxs2=None):
     dl_obj = ToxicComments
     tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
     np.random.seed(42)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    tokenized_dataset = dl_obj(datadir, dataidxs=dataidxs1, tokenizer=tokenizer)
-    
+    train_tokenized_dataset = dl_obj(datadir, dataidxs=dataidxs1, tokenizer=tokenizer, split='train')
+    validation_tokenized_dataset = dl_obj(datadir, dataidxs=dataidxs1, tokenizer=tokenizer, split='validation')
     train_dl = DataLoader(
-        tokenized_dataset["train_only_labeled"],
+        train_tokenized_dataset,
         batch_size=train_bs,
-        sampler=RandomSampler(tokenized_dataset["train_only_labeled"]),
+        sampler=RandomSampler(train_tokenized_dataset),
         collate_fn=data_collator,
         pin_memory=True,
     )
 
     test_dl = DataLoader(
-        tokenized_dataset["validation"],
+        validation_tokenized_dataset,
         batch_size=test_bs,
-        sampler=SequentialSampler(tokenized_dataset["validation"]),
+        sampler=SequentialSampler(validation_tokenized_dataset),
         collate_fn=data_collator,
         pin_memory=True,
     )
@@ -1317,6 +1318,29 @@ def get_dataloader_ToxicComments(datadir, train_bs, test_bs, dataidxs1=None, dat
         batched_y = torch.from_numpy(np.asarray(batched_y)).long()
         test_data.append((batched_x, batched_y))
     return train_data, test_data
+
+
+def load_partition_data_ToxCom(data_dir, batch_size, client_num_in_total, partition_alpha):
+    class_num = 7
+    new_users = []
+    for client_idx in range(client_num_in_total):
+        new_users.append(client_idx)
+    train_data_num = 0
+    test_data_num = 0
+    train_data_local_dict = dict()
+    test_data_local_dict = dict()
+    data_local_num_dict = dict()
+    train_data_global, test_data_global = get_dataloader_ToxicComments(data_dir, batch_size, batch_size)
+    new_users, new_train_data, new_test_data = noniid_merge_data_with_dirichlet_distribution(client_num_in_total, train_data_global, test_data_global, partition_alpha, 7)
+    for client_idx in range(client_num_in_total):
+        data_local_num_dict[client_idx] = len(new_train_data[client_idx])
+        train_data_local_dict[client_idx] = new_train_data[client_idx]
+        test_data_local_dict[client_idx] = new_test_data[client_idx]
+        train_data_num += len(new_train_data[client_idx])
+        test_data_num += len(new_test_data[client_idx])
+    return client_num_in_total, train_data_num, test_data_num, train_data_global, test_data_global, \
+              data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
 
 if __name__ == '__main__':
     logging.basicConfig()

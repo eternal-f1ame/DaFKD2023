@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from base import BaseModel
+from model.base import BaseModel
 from typing import Optional
-from model.utils import CustomAttention
+from model.nlp.utils import CustomAttention
 
 
 class SimpleSequenceGenerator(BaseModel):
